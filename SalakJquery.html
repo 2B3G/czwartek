@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Urodzeni tego dnia</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
+    />
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f2f3f5;
+        margin: 0;
+        padding: 40px;
+        color: #333;
+      }
+
+      h1 {
+        color: #2c3e50;
+        font-size: 32px;
+        margin-bottom: 10px;
+      }
+
+      p {
+        font-size: 16px;
+        margin-bottom: 20px;
+      }
+
+      input[type="date"] {
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-right: 10px;
+        background-color: #fff;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      button:hover {
+        background-color: #2980b9;
+      }
+
+      #results {
+        margin-top: 30px;
+      }
+
+      .osoba {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        padding: 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        cursor: pointer;
+      }
+
+      .osoba img {
+        width: 100px;
+        height: auto;
+        border-radius: 5px;
+        object-fit: cover;
+      }
+
+      .osoba a {
+        text-decoration: none;
+        color: #2c3e50;
+        font-weight: bold;
+      }
+
+      .osoba a:hover {
+        text-decoration: underline;
+      }
+
+      .osoba span {
+        color: #777;
+        font-size: 14px;
+        margin-left: 5px;
+      }
+
+      .osoba div {
+        font-size: 15px;
+        margin-top: 5px;
+        color: #555;
+      }
+
+      #celebrityDialog {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Urodzeni tego dnia</h1>
+    <p>
+      Wybierz datę, aby zobaczyć znane osoby urodzone tego dnia (dane z
+      Wikipedii po angielsku):
+    </p>
+
+    <input type="date" id="birthDate" />
+    <button id="checkButton">Pokaż urodziny</button>
+
+    <div id="results"></div>
+
+    <div id="celebrityDialog" title="Szczegóły osoby">
+      <div id="celebrityDetails"></div>
+    </div>
+
+    <script>
+      $("#checkButton").click(function () {
+        const dateVal = $("#birthDate").val();
+        if (!dateVal) {
+          alert("Proszę wybrać datę.");
+          return;
+        }
+
+        const [rok, miesiac, dzien] = dateVal.split("-");
+        const mm = miesiac.padStart(2, "0");
+        const dd = dzien.padStart(2, "0");
+
+        const apiUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/births/${mm}/${dd}`;
+
+        $("#results").html("<p>Ładowanie danych...</p>");
+
+        $.ajax({
+          url: apiUrl,
+          dataType: "json",
+          success: function (data) {
+            $("#results").empty();
+
+            if (!data.births || data.births.length === 0) {
+              $("#results").html(
+                "<p>Brak znanych urodzin dla wybranej daty.</p>"
+              );
+              return;
+            }
+
+            data.births.forEach(function (item) {
+              const person = item.pages && item.pages[0];
+
+              if (!person) return;
+
+              const name = item.text || $(person.displaytitle).text();
+              const yearBorn = item.year;
+              const description = person.description || "";
+              const imgSrc = person.thumbnail ? person.thumbnail.source : "";
+              const url =
+                person.content_urls && person.content_urls.desktop
+                  ? person.content_urls.desktop.page
+                  : "#";
+
+              const details = person.extract || "Nieznane";
+
+              const html = `
+              <div class="osoba" data-name="${name}" data-year="${yearBorn}" data-description="${description}" data-img="${imgSrc}" data-url="${url}" data-details="${details}">
+                ${imgSrc ? `<img src="${imgSrc}" alt="${name}">` : ""}
+                <div>
+                  <a href="${url}" target="_blank">${name}</a>
+                  <span>(ur. ${yearBorn})</span>
+                  <div>${description}</div>
+                </div>
+              </div>
+            `;
+              $("#results").append(html);
+            });
+
+            $(".osoba").click(function () {
+              const name = $(this).data("name");
+              const yearBorn = $(this).data("year");
+              const description = $(this).data("description");
+              const imgSrc = $(this).data("img");
+              const url = $(this).data("url");
+              const details = $(this).data("details");
+
+              const dialogContent = `
+              <h3>${name} (ur. ${yearBorn})</h3>
+              ${
+                imgSrc
+                  ? `<img src="${imgSrc}" alt="${name}" style="width: 100px; height: auto; border-radius: 5px;">`
+                  : ""
+              }
+              <p><strong>Opis:</strong> ${details || "Brak opisu."}</p>
+              <p><a href="${url}" target="_blank">Więcej informacji</a></p>
+            `;
+              $("#celebrityDetails").html(dialogContent);
+
+              $("#celebrityDialog").dialog({
+                width: 400,
+                modal: true,
+                buttons: {
+                  Ok: function () {
+                    $(this).dialog("close");
+                  },
+                },
+              });
+            });
+          },
+          error: function (jqXHR) {
+            $("#results").html(
+              "<p>Wystąpił błąd podczas pobierania danych. Spróbuj ponownie później.</p>"
+            );
+            console.error("Błąd API:", jqXHR);
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
